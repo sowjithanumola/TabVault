@@ -105,14 +105,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div
-              className="w-12 h-12 rounded-xl text-white flex items-center justify-center text-lg font-bold shadow-md"
-              style={{ backgroundColor: user.avatarColor || '#7c3aed' }}
-            >
-              {(user.name ? user.name.charAt(0) : user.email.charAt(0)).toUpperCase()}
-            </div>
+            {user.photoURL ? (
+              <img
+                src={user.photoURL}
+                alt={user.name}
+                className="w-12 h-12 rounded-xl object-cover border border-purple-500/30 shadow-md"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div
+                className="w-12 h-12 rounded-xl text-white flex items-center justify-center text-lg font-bold shadow-md"
+                style={{ backgroundColor: user.avatarColor || '#7c3aed' }}
+              >
+                {(user.name ? user.name.charAt(0) : user.email.charAt(0)).toUpperCase()}
+              </div>
+            )}
             <div>
-              <div className="text-sm font-bold text-slate-100">{user.name || 'Cloud User'}</div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-slate-100">{user.name || 'Cloud User'}</span>
+                {user.isGoogle && (
+                  <span className="text-[10px] bg-blue-950/80 border border-blue-800/60 text-blue-300 font-semibold px-1.5 py-0.5 rounded">
+                    Google
+                  </span>
+                )}
+              </div>
               <div className="text-xs font-mono text-slate-400">{user.email}</div>
               <div className="text-[11px] text-slate-500 mt-0.5">
                 Account ID: <span className="font-mono">{user.id}</span>

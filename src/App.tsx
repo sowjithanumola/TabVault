@@ -35,6 +35,21 @@ import {
   loadAccountCollections,
   saveAccountCollections,
 } from './utils/cloudAccount';
+import {
+  auth,
+  onAuthStateChanged,
+  signOutFromFirebase,
+  mapFirebaseUserToCloudUser,
+} from './utils/firebase';
+import {
+  subscribeToUserBookmarks,
+  subscribeToUserCollections,
+  saveBookmarkToFirestore,
+  deleteBookmarkFromFirestore,
+  saveCollectionToFirestore,
+  deleteCollectionFromFirestore,
+  syncUserProfile,
+} from './utils/firestoreService';
 
 export default function App() {
   const [user, setUser] = useState<CloudUser | null>(() => getCurrentCloudUser());
@@ -87,27 +102,54 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Firebase Auth state listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        const cloudUser = mapFirebaseUserToCloudUser(fbUser);
+        setUser(cloudUser);
+        syncUserProfile(cloudUser).catch(console.error);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   // When user changes (signs in or out), load their account data
   useEffect(() => {
-    if (user) {
-      setBookmarks(loadAccountBookmarks(user.id));
-      setCollections(loadAccountCollections(user.id));
-    } else {
+    if (!user) {
       setBookmarks([]);
       setCollections([]);
+      return;
+    }
+
+    if (user.isGoogle) {
+      // Real-time Firestore sync
+      const unsubBookmarks = subscribeToUserBookmarks(user.id, (bms) => {
+        setBookmarks(bms);
+      });
+      const unsubCollections = subscribeToUserCollections(user.id, (cols) => {
+        setCollections(cols);
+      });
+      return () => {
+        unsubBookmarks();
+        unsubCollections();
+      };
+    } else {
+      setBookmarks(loadAccountBookmarks(user.id));
+      setCollections(loadAccountCollections(user.id));
     }
   }, [user]);
 
-  // Sync bookmarks to active Cloud Account storage
+  // Sync bookmarks to active non-Google Cloud Account storage
   useEffect(() => {
-    if (user) {
+    if (user && !user.isGoogle) {
       saveAccountBookmarks(user.id, bookmarks);
     }
   }, [bookmarks, user]);
 
-  // Sync collections to active Cloud Account storage
+  // Sync collections to active non-Google Cloud Account storage
   useEffect(() => {
-    if (user) {
+    if (user && !user.isGoogle) {
       saveAccountCollections(user.id, collections);
     }
   }, [collections, user]);
@@ -169,10 +211,13 @@ export default function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    if (user?.isGoogle) {
+      await signOutFromFirebase();
+    }
     signOutCloudAccount();
     setUser(null);
-    showToast('info', 'Signed out of Cloud Account.');
+    showToast('info', 'Signed out successfully.');
     setActiveTab('vault');
   };
 

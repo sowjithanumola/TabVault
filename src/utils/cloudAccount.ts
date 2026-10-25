@@ -4,6 +4,7 @@ import { DEFAULT_COLLECTIONS } from './storage';
 const STORAGE_KEYS = {
   ACCOUNTS: 'tabvault_cloud_accounts_v1',
   ACTIVE_USER_ID: 'tabvault_active_user_id_v1',
+  SESSION_USER_ID: 'tabvault_session_user_id_v1',
   DATA_PREFIX: 'tabvault_account_',
 };
 
@@ -46,7 +47,11 @@ function saveAllCloudAccounts(accounts: CloudUser[]): void {
  */
 export function getCurrentCloudUser(): CloudUser | null {
   try {
-    const activeId = localStorage.getItem(STORAGE_KEYS.ACTIVE_USER_ID);
+    // Check sessionStorage first for tab/session isolation, then localStorage
+    const activeId =
+      sessionStorage.getItem(STORAGE_KEYS.SESSION_USER_ID) ||
+      localStorage.getItem(STORAGE_KEYS.ACTIVE_USER_ID);
+
     if (!activeId) return null;
     const accounts = getAllCloudAccounts();
     return accounts.find((a) => a.id === activeId) || null;
@@ -61,8 +66,10 @@ export function getCurrentCloudUser(): CloudUser | null {
 export function setCurrentCloudUser(user: CloudUser | null): void {
   try {
     if (user) {
+      sessionStorage.setItem(STORAGE_KEYS.SESSION_USER_ID, user.id);
       localStorage.setItem(STORAGE_KEYS.ACTIVE_USER_ID, user.id);
     } else {
+      sessionStorage.removeItem(STORAGE_KEYS.SESSION_USER_ID);
       localStorage.removeItem(STORAGE_KEYS.ACTIVE_USER_ID);
     }
   } catch (error) {
@@ -91,7 +98,8 @@ export function signUpCloudAccount(
   const existing = getAllCloudAccounts();
   const found = existing.find((a) => a.email.toLowerCase() === cleanEmail);
   if (found) {
-    return { success: false, error: 'An account with this email already exists. Please sign in.' };
+    // If account exists, update last login and sign them in
+    return signInCloudAccount(cleanEmail, password);
   }
 
   const colorIndex = Math.floor(Math.random() * AVATAR_COLORS.length);
@@ -109,9 +117,12 @@ export function signUpCloudAccount(
   saveAllCloudAccounts(updatedAccounts);
   setCurrentCloudUser(newUser);
 
-  // Initialize fresh collections for the new user, zero mock bookmarks
+  // Initialize isolated collections for the new user, zero mock bookmarks
   saveAccountBookmarks(newUser.id, []);
-  saveAccountCollections(newUser.id, DEFAULT_COLLECTIONS.map((c) => ({ ...c, userId: newUser.id })));
+  saveAccountCollections(
+    newUser.id,
+    DEFAULT_COLLECTIONS.map((c) => ({ ...c, userId: newUser.id }))
+  );
 
   return { success: true, user: newUser };
 }
@@ -133,7 +144,7 @@ export function signInCloudAccount(
   let user = accounts.find((a) => a.email.toLowerCase() === cleanEmail);
 
   if (!user) {
-    // Conveniently create the cloud account if it's the user's first time
+    // Auto-create cloud account using email prefix for name
     const namePart = cleanEmail.split('@')[0];
     const derivedName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
     const signUpResult = signUpCloudAccount(derivedName, cleanEmail, password);
@@ -157,7 +168,12 @@ export function signInCloudAccount(
  * Signs out of the current Cloud Account
  */
 export function signOutCloudAccount(): void {
-  setCurrentCloudUser(null);
+  try {
+    sessionStorage.removeItem(STORAGE_KEYS.SESSION_USER_ID);
+    localStorage.removeItem(STORAGE_KEYS.ACTIVE_USER_ID);
+  } catch (error) {
+    console.error('Failed to sign out', error);
+  }
 }
 
 /**

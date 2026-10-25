@@ -30,6 +30,8 @@ export interface CloudUser {
   name: string;
   email: string;
   avatarColor: string;
+  photoURL?: string;
+  isGoogle?: boolean;
   createdAt: string;
   lastLoginAt: string;
   cloudSyncEnabled: boolean;

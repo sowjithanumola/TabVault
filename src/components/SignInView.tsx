@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Bookmark, Shield, Cloud, Lock, ArrowRight, User, CheckCircle2 } from 'lucide-react';
+import { Bookmark, Cloud, Lock, ArrowRight, User, Loader2 } from 'lucide-react';
 import { signInCloudAccount, signUpCloudAccount } from '../utils/cloudAccount';
+import { signInWithGoogle } from '../utils/firebase';
 import { CloudUser } from '../types';
 
 interface SignInViewProps {
@@ -14,11 +15,29 @@ export const SignInView: React.FC<SignInViewProps> = ({
   onViewPrivacy,
   onViewTerms,
 }) => {
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [mode, setMode] = useState<'signin' | 'signup'>('signup');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  const handleGoogleAuth = async () => {
+    setError(null);
+    setIsGoogleLoading(true);
+    try {
+      const res = await signInWithGoogle();
+      if (res.success && res.user) {
+        onSignInSuccess(res.user);
+      } else if (res.error) {
+        setError(res.error);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Google sign-in encountered an issue.');
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,18 +56,6 @@ export const SignInView: React.FC<SignInViewProps> = ({
         onSignInSuccess(result.user);
       } else {
         setError(result.error || 'Failed to sign in to cloud account.');
-      }
-    }
-  };
-
-  const handleQuickSignIn = (demoEmail: string, demoName: string) => {
-    const result = signInCloudAccount(demoEmail);
-    if (result.success && result.user) {
-      onSignInSuccess(result.user);
-    } else {
-      const signUpResult = signUpCloudAccount(demoName, demoEmail);
-      if (signUpResult.success && signUpResult.user) {
-        onSignInSuccess(signUpResult.user);
       }
     }
   };
@@ -91,15 +98,31 @@ export const SignInView: React.FC<SignInViewProps> = ({
                 <Cloud className="w-6 h-6 text-purple-400" />
               </div>
               <h1 className="text-2xl font-bold tracking-tight text-slate-100">
-                TabVault Cloud Account
+                {mode === 'signup' ? 'Create Your Account' : 'Welcome to TabVault'}
               </h1>
               <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
-                Sign in to sync, organize, and access your personal web bookmarks.
+                {mode === 'signup'
+                  ? 'Sign up with Google to instantly save and sync your bookmarks across devices.'
+                  : 'Sign in to access your saved bookmarks and collections.'}
               </p>
             </div>
 
             {/* Mode Switcher */}
             <div className="flex p-1 rounded-lg bg-slate-950 border border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('signup');
+                  setError(null);
+                }}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                  mode === 'signup'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Sign Up
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -114,20 +137,6 @@ export const SignInView: React.FC<SignInViewProps> = ({
               >
                 Sign In
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMode('signup');
-                  setError(null);
-                }}
-                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
-                  mode === 'signup'
-                    ? 'bg-purple-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Create Account
-              </button>
             </div>
 
             {error && (
@@ -136,7 +145,56 @@ export const SignInView: React.FC<SignInViewProps> = ({
               </div>
             )}
 
-            {/* Credentials Form */}
+            {/* Google Authentication Button */}
+            <div>
+              <button
+                type="button"
+                onClick={handleGoogleAuth}
+                disabled={isGoogleLoading}
+                className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-lg bg-white hover:bg-slate-100 active:bg-slate-200 text-slate-900 font-medium text-sm transition-colors border border-slate-300 shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isGoogleLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-slate-700" />
+                    <span>Connecting to Google...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <path
+                        fill="#4285F4"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                      />
+                    </svg>
+                    <span>{mode === 'signup' ? 'Sign up with Google' : 'Sign in with Google'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Divider */}
+            <div className="relative flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-800"></div>
+              </div>
+              <div className="relative bg-slate-900 px-3 text-[11px] uppercase tracking-wider text-slate-500 font-medium">
+                Or continue with email
+              </div>
+            </div>
+
+            {/* Email Credentials Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
               {mode === 'signup' && (
                 <div>
@@ -194,45 +252,14 @@ export const SignInView: React.FC<SignInViewProps> = ({
                 type="submit"
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white font-semibold text-sm transition-colors shadow-sm cursor-pointer"
               >
-                <span>{mode === 'signup' ? 'Create Cloud Account' : 'Sign In to Cloud Account'}</span>
+                <span>{mode === 'signup' ? 'Create Account' : 'Sign In'}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </form>
-
-            {/* Quick 1-Click Sign In option */}
-            <div className="pt-4 border-t border-slate-800/80">
-              <div className="text-[11px] text-slate-500 uppercase tracking-wider mb-2 text-center font-medium">
-                Or Continue With One Click
-              </div>
-              <button
-                type="button"
-                onClick={() => handleQuickSignIn('anumola.sowjith@gmail.com', 'Sowjith')}
-                className="w-full flex items-center justify-center gap-2 px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-medium transition-colors border border-slate-700/80 cursor-pointer"
-              >
-                <User className="w-3.5 h-3.5 text-purple-400" />
-                <span>Continue as anumola.sowjith@gmail.com</span>
-              </button>
-            </div>
-
-            {/* Cloud Account Highlights */}
-            <div className="pt-4 border-t border-slate-800/80 space-y-2.5 text-xs text-slate-400">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                <span>Dedicated, isolated cloud vault per account</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>Clean start with zero mock data</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                <span>Automatic cloud synchronization & JSON backup</span>
-              </div>
-            </div>
           </div>
 
           <p className="text-center text-[11px] text-slate-500">
-            By signing in, you agree to our{' '}
+            By continuing, you agree to our{' '}
             <button onClick={onViewTerms} className="text-purple-400 hover:underline cursor-pointer">
               Terms
             </button>{' '}
